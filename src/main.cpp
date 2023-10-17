@@ -24,6 +24,8 @@ void check_mqtt_connection();
 bool reconnect();
 void process_sensors();
 void process_actuators();
+void send_data_to_broker();
+void callback(char *topic, byte *payload, unsigned int length);
 void clear();
 
 //Global Vars
@@ -73,21 +75,28 @@ void setup() {
   Serial.print(WiFi.localIP());
   Serial.println(fontReset);
 
+  client.setCallback(callback);
+
 
 }
   
 
 void loop() {
   check_mqtt_connection();
+  
 
-  process_sensors();
-  process_actuators(); 
+  
 
-  delay(5000);
-  serializeJsonPretty(mqtt_data_doc, Serial);
+  
+  
+  // para ver por serial como viene el json del broker
+  // delay(5000);
+  // serializeJsonPretty(mqtt_data_doc, Serial);
 
    
 }
+
+
 
 //USER FUNTIONS ⤵
 int prev_temp = 0;
@@ -140,6 +149,10 @@ void process_sensors(){
 
   prev_hum = hum;
 
+
+  //get led status ojo![4]harcodeado, tengo que ver en que posicion esta en las variables (depende elección cant widgets)
+  mqtt_data_doc["variables"][4]["last"]["value"] = (HIGH == digitalRead(led));
+
 }
 
 
@@ -152,6 +165,66 @@ void process_actuators(){
   {
     digitalWrite(led, LOW);
   }
+}
+
+
+
+//TEMPLATE ⤵
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+
+  String incoming = "";
+
+  for (int i = 0; i < length; i++)
+  {
+    incoming += (char)payload[i];
+  }
+
+  incoming.trim();
+
+  //process_incoming_msg(String(topic), incoming);
+
+  Serial.println(incoming);
+  Serial.println(String(topic));
+
+}
+
+
+
+long varsLastSend[20];
+
+void send_data_to_broker(){
+  
+  long now = millis();
+
+  for (int i = 0; i < mqtt_data_doc["variables"].size(); i++ ){
+    //primero me saco de encima las variables de salida (las que salen de la plataforma y se me vienen al dispositivo)
+    if (mqtt_data_doc["variables"][i]["variableType"] == "output"){
+      continue;
+    }
+
+    // ahora para enviar desde el dispositivo al broker
+    int freq = mqtt_data_doc["variables"][i]["variableSendFreq"];
+
+    if (now - varsLastSend[i] > freq * 1000){
+      varsLastSend[i] = millis();
+
+      String str_root_topic = mqtt_data_doc["topic"];
+      String str_variable = mqtt_data_doc["variables"][i]["variable"];
+      String topic = str_root_topic + str_variable + "/sdata";
+
+      String toSend = "";
+
+      serializeJson(mqtt_data_doc["variables"][i]["last"], toSend);
+
+      client.publish(topic.c_str(), toSend.c_str());
+    }
+
+
+  }
+
+
 }
 
 
@@ -214,6 +287,9 @@ void check_mqtt_connection(){
     }
   }else{
     client.loop();
+    process_sensors();
+    process_actuators();
+    send_data_to_broker(); 
   }  
 }
 
