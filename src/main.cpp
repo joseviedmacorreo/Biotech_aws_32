@@ -7,7 +7,7 @@
 #include <PubSubClient.h>
 
 String dId = "7777-8888";
-String webhook_pass = "xiB14kBzRU";
+String webhook_pass = "3f90IEZXJ8";
 String webhook_endpoint = "http://18.229.201.96:3001/api/getdevicecredentials";
 const char *mqtt_server = "18.229.201.96";
 
